@@ -51,7 +51,7 @@
     "hast-util-sanitize": "^5.0.1",
     "hast-util-select": "^6.0.2",
     "mdast-util-frontmatter": "^2.0.1",
-    "mdast-util-gfm": "^3.0.0",
+    "mdast-util-gfm": "^3.1.0",
     "mdast-util-to-markdown": "^2.1.0",
     "react-markdown": "^9.0.1",
     "remark-frontmatter": "^5.0.0",
