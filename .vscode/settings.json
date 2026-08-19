@@ -1,0 +1,57 @@
+{
+  "files.eol": "\n",
+
+  "[typescript]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+
+  "[javascript]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+
+  "[javascriptreact]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+
+  "[json]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+
+  "[prisma]": {
+    "editor.defaultFormatter": "Prisma.prisma"
+  },
+
+  // use vscode-stylelint
+  // see https://github.com/stylelint/vscode-stylelint
+  "stylelint.validate": ["css", "less", "scss"],
+  "stylelint.ignoreDisables": true,
+  "css.validate": false,
+  "less.validate": false,
+  "scss.validate": false,
+
+  "editor.codeActionsOnSave": {
+    "source.fixAll.biome": "explicit",
+    "source.organizeImports.biome": "explicit",
+    "source.fixAll.markdownlint": "explicit",
+    "source.fixAll.stylelint": "explicit"
+  },
+
+  "editor.formatOnSave": true,
+
+  "githubPullRequests.ignoredPullRequestBranches": [
+    "master"
+  ],
+
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+  "typescript.preferences.autoImportFileExcludePatterns": ["node_modules/*"],
+  "typescript.validate.enable": true,
+
+  "vitest.filesWatcherInclude": "**/*",
+  "git-worktree-menu.worktreeDir": "/workspace"
+
+}

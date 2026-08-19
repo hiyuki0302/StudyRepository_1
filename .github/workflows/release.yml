@@ -1,0 +1,210 @@
+name: Release
+
+on:
+  pull_request:
+    branches:
+      - release/current
+      - release/*.*.*
+    types: [closed]
+
+jobs:
+  create-github-release:
+
+    runs-on: ubuntu-latest
+
+    if: github.event.pull_request.merged == true
+
+    outputs:
+      RELEASED_VERSION: ${{ steps.package-json.outputs.packageVersion }}
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.pull_request.base.ref }}
+
+    - uses: pnpm/action-setup@v6
+
+    - uses: actions/setup-node@v6
+      with:
+        node-version: '24'
+        cache: 'pnpm'
+
+    - name: Install dependencies
+      run: |
+        pnpm add turbo --global
+        pnpm install --frozen-lockfile
+
+    - name: Refresh vendored model catalog (pre-release ingest step)
+      working-directory: ./apps/app
+      # Ingest step: fetch models.dev and regenerate the committed catalog so the
+      # release tag bundles the freshest chat+tool model list. On fetch/schema/empty
+      # failure vendor:models exits non-zero and preserves the existing committed
+      # artifact, so the release proceeds with the last-good catalog (design Error
+      # Handling: the release can continue with the previous catalog). The subsequent
+      # build reads only the committed JSON (no fetch/commit added to the build workflow).
+      continue-on-error: true
+      run: pnpm vendor:models
+
+    - name: Bump versions
+      run: |
+        turbo run version:patch --filter=@growi/app
+        sh ./apps/app/bin/github-actions/update-readme.sh
+
+    - name: Retrieve information from package.json
+      uses: myrotvorets/info-from-package-json-action@v2.0.2
+      id: package-json
+
+    - name: Update Changelog
+      uses: stefanzweifel/changelog-updater-action@v1
+      with:
+        latest-version: v${{ steps.package-json.outputs.packageVersion }}
+        release-notes: ${{ github.event.pull_request.body }}
+
+    - name: Update README.md for docker image
+      working-directory: ./apps/app
+      run: |
+        sh ./bin/github-actions/update-readme.sh
+      env:
+        RELEASED_VERSION: ${{ steps.package-json.outputs.packageVersion }}
+
+    - name: Commit, Tag and Push
+      uses: stefanzweifel/git-auto-commit-action@v5
+      with:
+        branch: ${{ github.event.pull_request.base.ref }}
+        commit_message: Release v${{ steps.package-json.outputs.packageVersion }}
+        tagging_message: v${{ steps.package-json.outputs.packageVersion }}
+
+    - uses: softprops/action-gh-release@v2
+      with:
+        body: ${{ github.event.pull_request.body }}
+        tag_name: v${{ steps.package-json.outputs.packageVersion }}
+        target_commitish: ${{ github.head_ref }}
+
+    - name: Delete drafts
+      uses: hugo19941994/delete-draft-releases@v1.0.1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+
+  determine-tags:
+    needs: create-github-release
+    runs-on: ubuntu-latest
+
+    outputs:
+      TAGS: ${{ steps.meta.outputs.tags }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Retrieve information from package.json
+      uses: myrotvorets/info-from-package-json-action@v2.0.2
+      id: package-json
+
+    - name: Docker meta for docker.io
+      uses: docker/metadata-action@v5
+      id: meta
+      with:
+        images: docker.io/growilabs/growi
+        sep-tags: ','
+        tags: |
+          type=raw,value=latest
+          type=semver,value=${{ needs.create-github-release.outputs.RELEASED_VERSION }},pattern={{major}}
+          type=semver,value=${{ needs.create-github-release.outputs.RELEASED_VERSION }},pattern={{major}}.{{minor}}
+          type=semver,value=${{ needs.create-github-release.outputs.RELEASED_VERSION }},pattern={{major}}.{{minor}}.{{patch}}
+
+  build-app-image:
+    needs: create-github-release
+
+    uses: ./.github/workflows/reusable-app-build-image.yml
+    with:
+      source-version: refs/tags/v${{ needs.create-github-release.outputs.RELEASED_VERSION }}
+      image-name: growilabs/growi
+      tag-temporary: latest
+    secrets:
+      AWS_ROLE_TO_ASSUME_FOR_OIDC: ${{ secrets.AWS_ROLE_TO_ASSUME_FOR_OIDC }}
+
+  publish-app-image:
+    needs: [determine-tags, build-app-image]
+
+    uses: ./.github/workflows/reusable-app-create-manifests.yml
+    with:
+      tags: ${{ needs.determine-tags.outputs.TAGS }}
+      registry: docker.io
+      image-name: 'growilabs/growi'
+      docker-registry-username: 'growimoogle'
+      tag-temporary: latest
+    secrets:
+      DOCKER_REGISTRY_PASSWORD: ${{ secrets.DOCKER_REGISTRY_PASSWORD_GROWIMOOGLE }}
+
+  post-publish:
+    needs: [create-github-release, publish-app-image]
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: v${{ needs.create-github-release.outputs.RELEASED_VERSION }}
+
+    - name: Update Docker Hub Description
+      uses: peter-evans/dockerhub-description@v3
+      with:
+        username: growimoogle
+        password: ${{ secrets.DOCKER_REGISTRY_PASSWORD_GROWIMOOGLE }}
+        repository: growilabs/growi
+        readme-filepath: ./apps/app/docker/README.md
+
+    - name: Slack Notification
+      uses: weseek/ghaction-release-slack-notification@master
+      with:
+        channel: '#release'
+        url: ${{ secrets.SLACK_WEBHOOK_URL }}
+        created_tag: 'v${{ needs.create-github-release.outputs.RELEASED_VERSION }}'
+
+
+  create-pr-for-next-rc:
+    needs: [create-github-release, publish-app-image]
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: v${{ needs.create-github-release.outputs.RELEASED_VERSION }}
+
+    - uses: pnpm/action-setup@v6
+
+    - uses: actions/setup-node@v6
+      with:
+        node-version: '24'
+        cache: 'pnpm'
+
+    - name: Install dependencies
+      run: |
+        pnpm add turbo --global
+        pnpm install --frozen-lockfile
+
+    - name: Bump versions for next RC
+      run: |
+        turbo run version:prepatch --filter=@growi/app
+        turbo run version:prepatch --filter=@growi/slackbot-proxy
+
+    - name: Retrieve information from package.json
+      uses: myrotvorets/info-from-package-json-action@v2.0.2
+      id: package-json
+
+    - name: Commit
+      uses: github-actions-x/commit@v2.9
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        push-branch: support/prepare-v${{ steps.package-json.outputs.packageVersion }}
+        commit-message: 'Bump version'
+        name: GitHub Action
+
+    - name: Create PR
+      uses: repo-sync/pull-request@v2
+      with:
+        source_branch: support/prepare-v${{ steps.package-json.outputs.packageVersion }}
+        destination_branch: ${{ github.head_ref }}
+        pr_title: Prepare v${{ steps.package-json.outputs.packageVersion }}
+        pr_label: flag/exclude-from-changelog,type/prepare-next-version
+        pr_body: "[skip ci] An automated PR generated by create-pr-for-next-rc"
+        github_token: ${{ secrets.GITHUB_TOKEN }}

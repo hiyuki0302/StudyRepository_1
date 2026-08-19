@@ -1,0 +1,70 @@
+{
+  "name": "@growi/slack",
+  "version": "1.0.0",
+  "description": "Slack integration libraries for GROWI",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./dist/consts": {
+      "import": "./dist/consts/index.js",
+      "require": "./dist/consts/index.cjs"
+    },
+    "./dist/interfaces": {
+      "import": "./dist/interfaces/index.js",
+      "require": "./dist/interfaces/index.cjs"
+    },
+    "./dist/middlewares": {
+      "import": "./dist/middlewares/index.js",
+      "require": "./dist/middlewares/index.cjs"
+    },
+    "./dist/models": {
+      "import": "./dist/models/index.js",
+      "require": "./dist/models/index.cjs"
+    },
+    "./dist/utils": {
+      "import": "./dist/utils/index.js",
+      "require": "./dist/utils/index.cjs"
+    },
+    "./dist/utils/*": {
+      "import": "./dist/utils/*.js",
+      "require": "./dist/utils/*.cjs"
+    }
+  },
+  "scripts": {
+    "build": "vite build",
+    "clean": "rimraf dist",
+    "dev": "vite build --mode dev",
+    "watch": "pnpm run dev -w --emptyOutDir=false",
+    "lint:biome": "biome check",
+    "lint:typecheck": "tsgo --noEmit",
+    "lint": "npm-run-all -p lint:*",
+    "test": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@growi/logger": "workspace:^",
+    "@slack/oauth": "^3.0.3",
+    "@slack/web-api": "^6.2.4",
+    "@types/http-errors": "^2.0.3",
+    "@types/url-join": "^4.0.2",
+    "axios": "^1.16.0",
+    "crypto": "^1.0.1",
+    "date-fns": "^3.6.0",
+    "extensible-custom-error": "^0.0.7",
+    "http-errors": "^2.0.0",
+    "qs": "^6.15.2",
+    "url-join": "^4.0.0"
+  },
+  "devDependencies": {
+    "@slack/types": "^2.14.0",
+    "@types/express": "^4",
+    "@types/qs": "^6.9.16"
+  }
+}
